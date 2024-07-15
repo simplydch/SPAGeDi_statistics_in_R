@@ -79,7 +79,6 @@ write.table(rbind(c("END")), file=data_file_name, append=TRUE, sep="\t", row.nam
 
 #### Create Command File
 
-
 # Function to create command file to pass to spagedi 
 
 # ind_stats: STATISTICS for individual level analyses
@@ -92,9 +91,11 @@ write.table(rbind(c("END")), file=data_file_name, append=TRUE, sep="\t", row.nam
 # LEVEL OF ANALYSES Spatial analyses carried out INDIVIDUALS (1) POPULATION (2) 
 # level_of_analysis <- 1
 
+
 createcmd <- function(cmd_file,
                       output_file,
                       ind_stats="A", comp_opts=0, output_opts=4, spat_format=3){
+
   
   if (comp_opts == 0 ){
     comp_opts=''
@@ -128,8 +129,10 @@ createcmd <- function(cmd_file,
 # For Moran's I - note you can combine run multiple analyses together e.g. "13A",
 # but this may not be possible if you don't have much RAM or are using a 32bit version
 
+
 cmd_file <- paste0(output_dir,"\\", cmd_file_name)
 spagedi_output_file <- paste0(output_dir,"\\", output_file)
+
 createcmd(cmd_file,
           spagedi_output_file,
           ind_stats="3", 
@@ -150,6 +153,7 @@ run_spagdi <- function(cmd_file){
 }
 
 run_spagdi(cmd_file)
+
 
 extract_table <- function(file, table_name, transpose=FALSE, skip_first=0){
   scanned_file <-scan(file, what=list(""), sep="\n", blank.lines.skip = FALSE)
@@ -193,6 +197,7 @@ morans_i_spagedi <- extract_table(output_file,
 row.names(morans_i_spagedi) <- morans_i_spagedi[,1]
 morans_i_spagedi <- morans_i_spagedi[,-1]
 
+
 plot(unlist(morans_i_spagedi[1,2:16]), correlogram_out)
 
 
@@ -204,6 +209,7 @@ createcmd(cmd_file,
           comp_opts=0, 
           output_opts=4, 
           spat_format=3)
+
 
 run_spagdi(cmd_file)
 
