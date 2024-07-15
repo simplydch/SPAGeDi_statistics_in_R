@@ -1,3 +1,6 @@
+source("SPAGeDi_functions.R")
+source("helper_functions.R")
+
 example_fam <- read.table("spatial_dist_example.fam")
 example_bim <- read.table("spatial_dist_example.bim")
 example_coords <- read.table("spatial_dist_example_coords.txt", header=TRUE)
@@ -29,6 +32,17 @@ plot(correlogram_out)
 
 
 
+roussets_a <- calc_roussets_a(IDs = example_coords$id, 
+                genotypes=example_geno
+)
+
+
+b <- lm(roussets_a~log(pairwise_spatial_dists[,"dist"]))$coefficients[2]
+
+
+####### Below is still work in progress and will eventually demonstrate the output 
+####### from these functions is comparable to SPAGeDi - can't promise all, or any of
+####### it is currently fully functional
 
 ##### Create Spagedi files 
 
@@ -40,11 +54,7 @@ assign_genotype <- function(x){
          0)}
 
 
-duplicated(example_coords[,2:3])
-
-example_coords[,2] <- jitter(example_coords[,2] )
-
-spagedi_geno <- apply(spatial_dist_example.bed, 2, function(x) sapply(x, assign_genotype))
+spagedi_geno <- apply(example_geno, 2, function(x) sapply(x, assign_genotype))
 
 cmd_file_name <- "cmd_input.txt"
 output_dir="."
@@ -69,47 +79,41 @@ write.table(rbind(c("END")), file=data_file_name, append=TRUE, sep="\t", row.nam
 
 #### Create Command File
 
-cmd_file <- paste0(output_dir,"\\", cmd_file_name)
-output_file_full <- paste0(output_dir,"\\", output_file)
 
+# Function to create command file to pass to spagedi 
+
+# ind_stats: STATISTICS for individual level analyses
+# comp_opts: COMPUTATIONAL OPTIONS See Manual - 0 for None
+# output_opts: OUTPUT OPTIONS - 0 for None
+# spat_format: FORMAT FOR PAIRWISE SPATIAL AND GENETIC DISTANCES
+
+
+# TODO: This needs fixed as option only appears if categories are provided
 # LEVEL OF ANALYSES Spatial analyses carried out INDIVIDUALS (1) POPULATION (2) 
-#TODO: This needs fixed as option only appears if categories are provided
-#level_of_analysis <- 1
+# level_of_analysis <- 1
 
-# STATISTICS for individual level analyses
-ind_stats <- "3"
-
-# COMPUTATIONAL OPTIONS See Manual - 0 for None
-comp_opts <- 0
-
-# OUTPUT OPTIONS - 0 for None
-
-output_opts <- 4
-
-#FORMAT FOR PAIRWISE SPATIAL AND GENETIC DISTANCES
-spat_format <- 3
-
-
-if (comp_opts == 0 ){
-comp_opts=''
-}
-
-if (output_opts == 0 ){
-  output_opts=''
-}
-
-
-createcmd <- function(){
+createcmd <- function(cmd_file,
+                      output_file,
+                      ind_stats="A", comp_opts=0, output_opts=4, spat_format=3){
+  
+  if (comp_opts == 0 ){
+    comp_opts=''
+  }
+  
+  if (output_opts == 0 ){
+    output_opts=''
+  }
+  
   #cat("\n", file=cmd_file)
   cat(data_file_name,"\n\n", file=cmd_file, sep='')
-  cat(output_file_full,"\n\n", file=cmd_file, append=TRUE, sep='')
+  cat(output_file,"\n\n", file=cmd_file, append=TRUE, sep='')
   
   
-  if (file.exists(output_file_full)){
+  if (file.exists(output_file)){
     message("WARNING SPECIFIED OUTPUT FILE WILL OVERWRITE PREVIOUS\n")
     will_continue <- readline(prompt = "Press [enter] to continue. Any other key then [enter] to stop: ");
     if(will_continue != ""){stop("Processing stopped by user input")}
-    file.remove(output_file_full)
+    file.remove(output_file)
   }
   
   
@@ -121,19 +125,31 @@ createcmd <- function(){
   cat(spat_format, '\n\n\n\n', file=cmd_file, append=TRUE, sep='')
 }
 
-createcmd()
+# For Moran's I - note you can combine run multiple analyses together e.g. "13A",
+# but this may not be possible if you don't have much RAM or are using a 32bit version
+
+cmd_file <- paste0(output_dir,"\\", cmd_file_name)
+spagedi_output_file <- paste0(output_dir,"\\", output_file)
+createcmd(cmd_file,
+          spagedi_output_file,
+          ind_stats="3", 
+          comp_opts=0, 
+          output_opts=4, 
+          spat_format=3)
 
 
 #### Exact implementation may differ depending on OS - this creates a bat file to allow it work on Windows based machines
 #### Assumes spagedi program is on PATH and is called as spagedi
-tmp_file <- paste0(paste(sample(c(LETTERS, letters, rep(1:9, each=3)), 10), collapse=""), "_tmp.bat")
-cat(paste0("spagedi < C:\\Users\\Darren\\Local_Files\\RProjects\\Glasgow\\Manuscript_Code\\cmd_input.txt"), file=tmp_file) 
-system2(tmp_file,stdout="test.out")
-file.remove(tmp_file)
 
 
+run_spagdi <- function(cmd_file){
+  tmp_file <- create_temp_file(".bat")
+  cat(paste0("spagedi < ", cmd_file), file=tmp_file) 
+  system2(tmp_file, stdout="test.out")
+  file.remove(tmp_file)
+}
 
-
+run_spagdi(cmd_file)
 
 extract_table <- function(file, table_name, transpose=FALSE, skip_first=0){
   scanned_file <-scan(file, what=list(""), sep="\n", blank.lines.skip = FALSE)
@@ -171,13 +187,32 @@ computed_stats_df <- extract_table(output_file_full,
                                    "VALUES OF THE COMPUTED STATISTICS",
                                    transpose=TRUE)
 
-
-
-
-morans_i_spagedi <- extract_table(output_file_full, 
+morans_i_spagedi <- extract_table(output_file, 
                                   "Pairwise RELATIONSHIP coefficients (Moran's I for individual allele freq)",
                                   skip_first = 1)
 row.names(morans_i_spagedi) <- morans_i_spagedi[,1]
 morans_i_spagedi <- morans_i_spagedi[,-1]
 
-morans_i_spagedi[1,1:16]
+plot(unlist(morans_i_spagedi[1,2:16]), correlogram_out)
+
+
+### For Rousset's a
+
+createcmd(cmd_file,
+          spagedi_output_file,
+          ind_stats="A", 
+          comp_opts=0, 
+          output_opts=4, 
+          spat_format=3)
+
+run_spagdi(cmd_file)
+
+
+roussets_a_spagedi <- extract_table(output_file_full, 
+                                  "Pairwise Rousset's distance between individuals ('a' in Rousset, 2000)",
+                                  skip_first = 1)
+
+row.names(roussets_a_spagedi) <- roussets_a_spagedi[,1]
+roussets_a_spagedi <- roussets_a_spagedi[,-1]
+
+cat(unname(b), " is (almost) the same as ", roussets_a_spagedi[1,"b.log.slope.log.dist."])
