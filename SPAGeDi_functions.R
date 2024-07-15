@@ -2,7 +2,7 @@
 
 # Function to calculate distance between pairs using Spherical law of cosines which
 # matches SpageDi, even though it says it uses Euclidian distances
-# The Haversine formula procudes similar results, the distm function from the geosphere
+# The Haversine formula produces similar results, the distm function from the geosphere
 # can also produce either of these without transforming the coordinates
 
 calc_spatial_dist <- function(data_file){
@@ -24,10 +24,12 @@ calc_spatial_dist <- function(data_file){
   return(data.frame(id1 = pairs[,1], id2=pairs[,2], dist=spatial_dists))
 }
 
+# Function to calculate Moran's i
+
 
 calc_morans_i <- function(IDs, genotypes, spatial_distances) {
   
-  genotypes <- t(genotypes)
+  genotypes <- genotypes/2
   num_non_na_per_SNP <- colSums(genotypes * 0 + 1, na.rm = TRUE)
   
   
@@ -65,6 +67,8 @@ calc_morans_i <- function(IDs, genotypes, spatial_distances) {
 }
 
 
+# Function to calculate correlograms
+
 create_correlogram <- function(dist_classes, spatial_distances, MoransI_values) {
   spatial_distances[spatial_distances == -1] <- 0
   dist_mat <- cbind(MoransI_values, spatial_distances)
@@ -80,4 +84,43 @@ create_correlogram <- function(dist_classes, spatial_distances, MoransI_values) 
     }
   })
   return(correlogram)
+}
+
+# Function to calculate  Roussets a
+
+calc_roussets_a <- function(IDs, genotypes) {
+  
+  genotypes <- genotypes/2
+  
+  pairs <- t(combn(IDs, 2))
+  
+  ind_i_ref <- match(pairs[, 1], IDs)
+  ind_j_ref <- match(pairs[, 2], IDs)
+  
+  temp_geno <- genotypes * 0
+  temp_geno[genotypes==0.5] <- 1
+  
+  num_non_na_per_loc <- colSums(genotypes * 0 + 1, na.rm = TRUE)
+  geno_sums <- colSums(temp_geno,na.rm=T)
+  rm(temp_geno)
+  
+  
+  out_rousset_a <- sapply(1:nrow(pairs), function(x) {
+    ind_i <- ind_i_ref[x]
+    ind_j <- ind_j_ref[x]
+    
+    
+    geno <- genotypes[c(ind_i, ind_j), ]
+    y <- complete.cases(t(geno))
+    geno_complete <- geno[, y]
+    
+    Hwt <- sum(geno_complete==0.5)/(ncol(geno_complete)*2)
+    Hot <- mean(geno_sums[y]/num_non_na_per_loc[y])
+    #Hbt <- sum(abs(geno_complete[1,] - geno_complete[2,]))/ncol(geno_complete)
+    Hbt <- mean(ifelse(abs(geno_complete[1,]-geno_complete[2,])==1,1,
+                       ifelse(geno_complete[1,]==0.5 | geno_complete[2,]==0.5,0.5,0)))
+    
+    (Hbt-0.5*Hwt-0.5*mean(Hot))/mean(Hot) 
+  })
+  return(out_rousset_a)
 }
